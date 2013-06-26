@@ -40,8 +40,8 @@ If your youbot_description and youbot_oodl packages are up to date, the xtion_ca
  
 To begin calibration, make sure the ar_marker is within the camera view, then call
 
-```> rosservice call /ar_camera_calibration_start```
+```> rosservice call /ar_camera_calibrator/start```
 
 When you are satisfied, lock the position by calling
 
-```> rosservice call /ar_camera_calibration_stop```
+```> rosservice call /ar_camera_calibrator/stop```
