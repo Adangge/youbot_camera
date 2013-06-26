@@ -3,6 +3,9 @@
   <!-- note that for this to run, you must set the environment variable XN_SERVER_LOCATION to the location of the XnSensorServer, which should exist within the ASUS camera drivers. It also needs to have global execute permissions -->
   <node name="hold_XnSensorServer" pkg="rail_object_discovery" type="always_run_XnSensorServer.sh" output="screen" />
 
+  <!-- max data skip so depth_registered/points will appear quickly -->
+  <param name="xtion/driver/data_skip" value="10"/>
+
   <include file="$(find openni_launch)/launch/openni.launch">
     <arg name="camera" value="xtion" />
     <arg name="depth_registration" value="true" />
