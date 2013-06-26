@@ -29,8 +29,8 @@ int main(int argc, char** argv) {
   tf::TransformListener tf_listener;
   tf::TransformBroadcaster tf_broadcaster;
 
-  ros::ServiceServer start_service = n.advertiseService("ar_camera_calibration_start", calibration_start);
-  ros::ServiceServer stop_service = n.advertiseService("ar_camera_calibration_stop", calibration_stop);
+  ros::ServiceServer start_service = n.advertiseService("ar_camera_calibrator/start", calibration_start);
+  ros::ServiceServer stop_service = n.advertiseService("ar_camera_calibrator/stop", calibration_stop);
 
   transform_gripper2camera.setOrigin(tf::Vector3(0.04,0,0));
   transform_gripper2camera.setRotation(tf::createQuaternionFromRPY(0,1.57,0));
