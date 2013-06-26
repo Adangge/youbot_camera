@@ -19,6 +19,7 @@ Then put that path into the variable like so:
 
 ```> echo XN_SERVER_LOCATION=path```
 
+If you want that variable to be automatically defined in every new terminal you run, add that line to your .bashrc file.
 Make sure that the XnSensorServer has global execute permissions.
 If it does not, give it such permissions by going to its location and running:
 
