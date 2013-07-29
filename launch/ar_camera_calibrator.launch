@@ -1,6 +1,6 @@
 <launch>
-	<arg name="marker_pattern" default="$(find ar_pose)/data/patt.hiro"/>
-	<arg name="marker_width" default="80.0"/>
+	<arg name="marker_pattern" default="$(find youbot_camera)/data/patt.rail_simple"/>    <!-- "$(find ar_pose)/data/patt.hiro"/> -->
+	<arg name="marker_width" default="110.0"/>
 
         <node name="ar_pose" pkg="ar_pose" type="ar_single" respawn="false" output="screen" >
                 <param name="marker_pattern" type="string" value="$(arg marker_pattern)"/>
@@ -12,6 +12,6 @@
 	</node>
 
 	<!-- a node which publishes openni_pose based on the difference between ar_marker and ar_marker_fixed, as well as the pose of the gripper -->
-        <node name="ar_camera_calibrator" pkg="rail_object_discovery" type="ar_camera_calibrator" output="screen" />
+        <node name="ar_camera_calibrator" pkg="youbot_camera" type="ar_camera_calibrator" output="screen" />
 
 </launch>
