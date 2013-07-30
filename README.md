@@ -31,17 +31,15 @@ Running the calibrator
 Make sure the ar_pose package is installed. 
 If you want a groovy version, one can be found here: https://github.com/mjcarroll/ccny_vision/tree/groovy-devel
 Change the camera topics in ar_pose_single.h from camera/stuff to xtion/stuff. (This should really be parameterized)
-Run the calibrator:
+Run ar_pose:
 
-```> roslaunch youbot_camera ar_camera_calibrator.launch```
+```> roslaunch youbot_camera ar_pose.launch```
 
-This will initially publish a default transform from the gripper_palm_link to the xtion_camera frame.
-If your youbot_description and youbot_oodl packages are up to date, the xtion_camera frame will be the root link of the xtion camera.
- 
-To begin calibration, make sure the ar_marker is within the camera view, then call
+This will launch ar_pose with the rail marker. 
+Make sure the marker is within the view of the camera. See the ar_pose documentation.
+When ready, calibrate the camera's pose by running the calibrator, like so:
 
-```> rosservice call /ar_camera_calibrator/start```
+```> roslaunch youbot_camera calibrator.launch```
 
-When you are satisfied, lock the position by calling
-
-```> rosservice call /ar_camera_calibrator/stop```
+This will overwrite a line in the youbot's urdf which specifies the gripper_palm_link to xtion_camera frame.
+To see the result of the calibration, restart the joint state publisher.
