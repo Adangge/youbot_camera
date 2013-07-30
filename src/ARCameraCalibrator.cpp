@@ -126,7 +126,7 @@ int main(int argc, char** argv) {
   tf::TransformListener tf_listener;
   tf::TransformBroadcaster tf_broadcaster;
 
-  ros::ServiceServer start_service = n.advertiseService("ar_camera_calibrator/calibrate", calibration_start);
+  ros::ServiceServer start_service = n.advertiseService("/ar_camera_calibrator/calibrate", calibration_start);
 
   //get the urdf location parameter
   if (n.getParam("/urdf_location", urdf_location)) {
