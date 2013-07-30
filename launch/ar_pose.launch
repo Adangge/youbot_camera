@@ -11,7 +11,4 @@
                 <param name="use_history" type="bool" value="true"/>
 	</node>
 
-	<!-- a node which publishes openni_pose based on the difference between ar_marker and ar_marker_fixed, as well as the pose of the gripper -->
-        <node name="ar_camera_calibrator" pkg="youbot_camera" type="ar_camera_calibrator" output="screen" />
-
 </launch>
