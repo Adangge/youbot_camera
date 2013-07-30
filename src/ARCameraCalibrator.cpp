@@ -6,7 +6,6 @@
 #include <iostream>
 #include <fstream>
 
-bool calibrate=false; //whether to calibrate the camera this step
 tf::Transform transform_gripper2camera;
 std::string urdf_location=""; //location of the urdf file, read from a param
 std::vector<std::string> lines; //every line in the urdf file
@@ -31,18 +30,20 @@ bool read_urdf(std::string location) {
       getline(myfile,line);
       lines.push_back(line);
 
+      //if the last was the flag, check that this line has an origin tag
+      if (last_line_was_flag
+           && (line.find("origin"))!=std::string::npos)
+      {
+        whichline=i;
+        ROS_INFO("Found line to edit: line %d: '%s'",i,line.c_str());
+      }
+
       //see if the current line is the flag
       if ( !last_line_was_flag
            && (line.find("AR_CALIBRATOR:EDIT_HERE"))!=std::string::npos)
       {
         last_line_was_flag=true;
-      }
-      //if the last was the flag, check that this line has an origin tag
-      if (last_line_was_flag
-           && (line.find("origin")!=std::string::npos))
-      {
-        whichline=i;
-        ROS_INFO("Found line to edit: line %d: '%s'",i,line.c_str());
+        ROS_INFO("Found calibrator start flag in urdf");
       }
       else last_line_was_flag=false;
       i++;
@@ -71,11 +72,12 @@ bool write_urdf() {
   std::stringstream updated_line;
   updated_line << "                  <origin xyz=\"";
   updated_line << x << " " << y << " " << z;
-  updated_line << " rpy=\"" << r << " " << p << " " << yaw << "\" />";
-  ROS_INFO_STREAM("replacing old origin with: '" << updated_line << "'");
+  updated_line << "\" rpy=\"" << r << " " << p << " " << yaw << "\" />";
+  ROS_INFO_STREAM("replacing old origin with: '" << updated_line.str() << "'");
   lines.at(whichline)=updated_line.str();
 
   //copy old file before writing in case something goes wrong
+  ROS_INFO("Creating backup of urdf");
   std::ifstream src(urdf_location.c_str(), std::ios::binary);
   std::stringstream temp;
   temp << urdf_location << ".temp";
@@ -103,20 +105,13 @@ bool write_urdf() {
       }
     } //end iterator
     myfile.close();
+    ROS_INFO("Success");
     return true;
   } //end of 'if (myfile.is_open())'
   else {
     ROS_ERROR("Error opening the urdf file for writing");
     return false;
   }
-}
-
-bool calibration_start(std_srvs::Empty::Request& request, std_srvs::Empty::Response& response)
-{
-  //recalculate gripper->openni_pose transform
-  ROS_INFO("Beginning camera pose calibration based on ar tag location");
-  calibrate=true;
-  return true;
 }
 
 int main(int argc, char** argv) {
@@ -126,27 +121,26 @@ int main(int argc, char** argv) {
   tf::TransformListener tf_listener;
   tf::TransformBroadcaster tf_broadcaster;
 
-  ros::ServiceServer start_service = n.advertiseService("/ar_camera_calibrator/calibrate", calibration_start);
-
   //get the urdf location parameter
-  if (n.getParam("/urdf_location", urdf_location)) {
-
+  if (n.getParam("/ar_camera_calibrator/urdf_location", urdf_location)) {
     if (read_urdf(urdf_location))
     {
       //set the transform to the one that was read
       double x,y,z,r,p,yaw;
-      if (sscanf(lines.at(whichline).c_str(),
-            "%*s<origin xyz=\"%lf %lf %lf\" rpy=\"%lf %lf %lf\" />%*s",
-            &x,&y,&z,&r,&p,&yaw)
-          <6)
+      char garbage1[100],garbage2[100];
+      int parsed = sscanf(lines.at(whichline).c_str(),
+            "%[^=]=\"%lf %lf %lf\"%[^=]=\"%lf %lf %lf",
+            garbage1,&x,&y,&z,garbage2,&r,&p,&yaw);
+      if (parsed<6)
       {
-        ROS_ERROR("Error parsing origin tag, shutting down");
+        ROS_ERROR_STREAM("Error parsing origin tag. Got " << parsed <<", expected 6. shutting down");
         return 0;
       }
       else {
-        ROS_INFO("Read transform xyz=%lf %lf %lf  rpy=%lf %lf %lf",x,y,z,r,p,y);
+        ROS_INFO("Read transform xyz=%lf %lf %lf  rpy=%lf %lf %lf",x,y,z,r,p,yaw);
         transform_gripper2camera.setOrigin(tf::Vector3(x,y,z));
-        transform_gripper2camera.setRotation(tf::createQuaternionFromRPY(r,p,y));
+        tf::Quaternion rot = tf::createQuaternionFromRPY(r,p,yaw);
+        transform_gripper2camera.setRotation(rot.normalized());
       }
     }
     else {
@@ -162,15 +156,19 @@ int main(int argc, char** argv) {
   }
 
   ros::Rate rate(10.0);
+
+  if (n.ok()) for (int i=0; i<10; i++) rate.sleep();
+
+
   while (n.ok()) {
 
-    if (calibrate)
-    {
-
-      //tranform from base_footprint to gripper_palm_link
-      tf::Transform transform_marker2camera;
+    //tranform from base_footprint to gripper_palm_link
+    tf::Transform transform_marker2camera;
+    //do this a bunch of times because something goes wrong otherwise
+    //TODO: consider interpolating the transforms instead
+    for (int i=0; i<30; i++) {
       bool ok = true;
-            //get transform from ar marker to camera
+      //get transform from ar marker to camera
       try {
         tf::StampedTransform transform;
         tf_listener.lookupTransform(
@@ -178,69 +176,49 @@ int main(int argc, char** argv) {
   		"/xtion_camera",
   		ros::Time(0), //latest
   		transform);
-	tf::Quaternion q;
+        tf::Quaternion q;
         q.setRPY(0,0,1.57);
-	tf::Transform rot;
-	rot.setRotation(q);
-	transform_marker2camera=rot*transform;
+        tf::Transform rot;
+        rot.setRotation(q);
+        transform_marker2camera=rot*transform;
+
       }
       catch (tf::TransformException ex) {
-        ROS_ERROR("ARCameraCalibrator.cpp: couldn't get grippper orientation: %s",ex.what());
+        ROS_ERROR("ARCameraCalibrator.cpp: couldn't get gripper orientation: %s",ex.what());
         ok=false;
       }
 
       if (ok) {
-	tf_broadcaster.sendTransform(
-		tf::StampedTransform(transform_marker2camera,ros::Time::now(),
-		"ar_marker_fixed", "xtion_calibrated"));
-	try {
-	  tf::StampedTransform transform;
-          tf_listener.lookupTransform(
-  		"/gripper_palm_link",
-  		"/xtion_calibrated",
-  		ros::Time(0), //latest
-  		transform);
-	  transform_gripper2camera.setOrigin(transform.getOrigin());
-	  transform_gripper2camera.setRotation(transform.getRotation());
-          calibrate=false;
-          if (!write_urdf()) {
-            ROS_ERROR("Couldn't write URDF, shutting down");
-            return 0;
-          }
-	}
-        catch (tf::TransformException ex) {
-          ROS_ERROR("ARCameraCalibrator.cpp: couldn't get grippper to camera transform: %s",ex.what());
-        }
-      }
-    } //end "if calibrate"
+        tf_broadcaster.sendTransform(
+          tf::StampedTransform(transform_marker2camera,ros::Time::now(),
+          "ar_marker_fixed", "xtion_calibrated"));
 
-    ros::spinOnce();
-    rate.sleep();
+        ros::spinOnce();
+        rate.sleep();
+      }
+    }
+
+
+    try {
+      tf::StampedTransform transform;
+      tf_listener.lookupTransform(
+	"/gripper_palm_link",
+	"/xtion_calibrated",
+	ros::Time(0), //latest
+	transform);
+      transform_gripper2camera.setOrigin(transform.getOrigin());
+      transform_gripper2camera.setRotation(transform.getRotation());
+      if (!write_urdf()) {
+        ROS_ERROR("Couldn't write URDF, shutting down");
+      }
+      return 0;
+    }
+    catch (tf::TransformException ex) {
+      ROS_ERROR("ARCameraCalibrator.cpp: couldn't get gripper to camera transform: %s",ex.what());
+      ROS_INFO("The ar_marker may not have been in view, retrying");
+    }
   }
+  ros::spinOnce();
+  rate.sleep();
 
 }
-
-/*
-//get transform from ar_marker_fixed to ar_marker
-      tf::Transform transform_arDiff;
-      try {
-        tf::StampedTransform transform;
-        tf_listener.lookupTransform(
-  		"/ar_marker",
-  		"/ar_marker_fixed",
-  		ros::Time(0), //latest
-  		transform);
-	transform_arDiff.setOrigin(transform.getOrigin());
-	transform_arDiff.setRotation(transform.getRotation());
-        ROS_INFO("AR orientation difference: %f", 
-		tf::tfDot(
-			tf::Vector3(0,0,1),
-			tf::quatRotate(transform_arDiff.getRotation(),tf::Vector3(0,0,1))
-		)
-	);
-      }
-      catch (tf::TransformException ex) {
-        ROS_ERROR("ARCameraCalibrator.cpp: couldn't get ar marker error: %s",ex.what());
-        ok=false;
-      }
-*/
